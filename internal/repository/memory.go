@@ -35,7 +35,7 @@ func (r *MemoryRepository) Create(ctx context.Context, originalURL string) (*mod
 	link := &model.Link{
 		ID:          id,
 		OriginalURL: originalURL,
-		CreatedAt:   time.Now(),
+		CreatedAt:   time.Now().UTC(),
 	}
 	r.byID[id] = link
 

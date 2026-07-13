@@ -43,11 +43,17 @@ func DecodeBase62(code string) (uint64, error) {
 	if code == "" {
 		return 0, fmt.Errorf("base62: 短码为空")
 	}
+	const maxUint64 = ^uint64(0)
 	var n uint64
 	for i := 0; i < len(code); i++ {
 		v, ok := decodeMap[code[i]]
 		if !ok {
 			return 0, fmt.Errorf("base62: 非法字符 %q", code[i])
+		}
+		// 溢出检测：若 n*base+v 会超过 uint64 上限则拒绝，
+		// 避免静默回绕导致解析到错误的 ID。
+		if n > (maxUint64-v)/base {
+			return 0, fmt.Errorf("base62: 短码超出取值范围")
 		}
 		n = n*base + v
 	}

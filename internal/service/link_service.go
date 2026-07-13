@@ -13,6 +13,9 @@ import (
 // ErrInvalidURL 表示传入的原始链接不合法。
 var ErrInvalidURL = errors.New("service: 非法的 URL")
 
+// maxURLLength 限制原始链接长度，防止超大 URL 撑爆存储。
+const maxURLLength = 2048
+
 // LinkService 承载短链业务逻辑，只依赖 repository 接口。
 type LinkService struct {
 	repo repository.LinkRepository
@@ -40,9 +43,9 @@ func (s *LinkService) Create(ctx context.Context, originalURL string) (*model.Li
 // Resolve 用于重定向：按短码找到原始链接，并累加点击数。
 // 非法短码统一按"不存在"处理，避免向外暴露内部编码细节。
 func (s *LinkService) Resolve(ctx context.Context, code string) (*model.Link, error) {
-	id, err := DecodeBase62(code)
+	id, err := s.codeToID(code)
 	if err != nil {
-		return nil, repository.ErrNotFound
+		return nil, err
 	}
 	link, err := s.repo.FindByID(ctx, id)
 	if err != nil {
@@ -56,9 +59,9 @@ func (s *LinkService) Resolve(ctx context.Context, code string) (*model.Link, er
 
 // GetByCode 用于查详情：只读，不累加点击数。
 func (s *LinkService) GetByCode(ctx context.Context, code string) (*model.Link, error) {
-	id, err := DecodeBase62(code)
+	id, err := s.codeToID(code)
 	if err != nil {
-		return nil, repository.ErrNotFound
+		return nil, err
 	}
 	link, err := s.repo.FindByID(ctx, id)
 	if err != nil {
@@ -68,10 +71,27 @@ func (s *LinkService) GetByCode(ctx context.Context, code string) (*model.Link, 
 	return link, nil
 }
 
+// codeToID 将短码还原为 ID，并做规范化校验：
+// 非法字符或前导零等非规范写法（如 "01" 也能解出 1）一律按不存在处理，
+// 保证一个链接只对应唯一一个有效短码。
+func (s *LinkService) codeToID(code string) (uint64, error) {
+	id, err := DecodeBase62(code)
+	if err != nil {
+		return 0, repository.ErrNotFound
+	}
+	if EncodeBase62(id) != code {
+		return 0, repository.ErrNotFound
+	}
+	return id, nil
+}
+
 // validateURL 只接受 http/https 且带主机名的链接，
 // 防止存入 javascript:、file:// 等危险协议（安全考虑）。
 func validateURL(raw string) error {
 	if raw == "" {
+		return ErrInvalidURL
+	}
+	if len(raw) > maxURLLength {
 		return ErrInvalidURL
 	}
 	u, err := url.Parse(raw)

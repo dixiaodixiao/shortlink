@@ -58,6 +58,19 @@ func TestDecodeBase62_Invalid(t *testing.T) {
 	}
 }
 
+// 超长短码会导致 uint64 溢出，应返回错误而非静默回绕
+func TestDecodeBase62_Overflow(t *testing.T) {
+	// 20 个 'Z'（合法字符）远超 uint64 上限
+	if _, err := DecodeBase62("ZZZZZZZZZZZZZZZZZZZZ"); err == nil {
+		t.Error("超长短码应返回溢出错误，但 err 为 nil")
+	}
+	// 边界：uint64 最大值对应的短码应仍可正常解码
+	maxCode := EncodeBase62(^uint64(0))
+	if _, err := DecodeBase62(maxCode); err != nil {
+		t.Errorf("uint64 最大值短码 %q 不应报错: %v", maxCode, err)
+	}
+}
+
 // 编码后再解码应还原为原值（往返一致性，property 测试思路）
 func TestEncodeDecodeRoundTrip(t *testing.T) {
 	for _, id := range []uint64{0, 1, 61, 62, 100, 999999, 1 << 40} {

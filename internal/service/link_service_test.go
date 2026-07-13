@@ -3,6 +3,7 @@ package service
 import (
 	"context"
 	"errors"
+	"strings"
 	"testing"
 
 	"github.com/dixiaodixiao/shortlink/internal/repository"
@@ -34,6 +35,31 @@ func TestLinkService_Create_InvalidURL(t *testing.T) {
 		if _, err := svc.Create(context.Background(), c); !errors.Is(err, ErrInvalidURL) {
 			t.Errorf("Create(%q) 期望 ErrInvalidURL, 得到 %v", c, err)
 		}
+	}
+}
+
+func TestLinkService_Create_TooLong(t *testing.T) {
+	svc := newTestService()
+	longURL := "https://example.com/" + strings.Repeat("a", maxURLLength)
+	if _, err := svc.Create(context.Background(), longURL); !errors.Is(err, ErrInvalidURL) {
+		t.Errorf("超长 URL 期望 ErrInvalidURL, 得到 %v", err)
+	}
+}
+
+// 前导零等非规范短码应按不存在处理（虽然 DecodeBase62("01")==1）
+func TestLinkService_Resolve_NonCanonical(t *testing.T) {
+	svc := newTestService()
+	ctx := context.Background()
+	created, _ := svc.Create(ctx, "https://example.com") // code == "1"
+
+	for _, bad := range []string{"01", "001", "0000001"} {
+		if _, err := svc.Resolve(ctx, bad); !errors.Is(err, repository.ErrNotFound) {
+			t.Errorf("非规范短码 %q 期望 ErrNotFound, 得到 %v", bad, err)
+		}
+	}
+	// 规范短码仍应正常解析
+	if _, err := svc.Resolve(ctx, created.Code); err != nil {
+		t.Errorf("规范短码 %q 不应报错: %v", created.Code, err)
 	}
 }
 

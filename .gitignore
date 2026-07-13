@@ -1,0 +1,25 @@
+# 编译产物
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+/bin/
+/build/
+/server
+
+# 测试与覆盖率
+*.out
+coverage.*
+
+# 环境变量与本地配置
+.env
+*.local
+
+# IDE
+.idea/
+.vscode/
+
+# 操作系统
+.DS_Store
+Thumbs.db

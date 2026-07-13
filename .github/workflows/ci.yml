@@ -1,0 +1,42 @@
+name: CI
+
+on:
+  push:
+    branches: ["**"]
+  pull_request:
+
+jobs:
+  test:
+    name: 构建与测试
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: 安装 Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod # 与 go.mod 声明的版本保持一致
+          cache: true
+
+      - name: 静态检查 (go vet)
+        run: go vet ./...
+
+      - name: 构建
+        run: go build ./...
+
+      # CI 环境是 Linux 且自带 gcc，可开启竞争检测（本地 Windows 无 gcc 跑不了）
+      - name: 测试 (竞争检测 + 覆盖率)
+        run: go test -race -covermode=atomic -coverprofile=coverage.out ./...
+
+      - name: 覆盖率汇总
+        run: go tool cover -func=coverage.out | tail -1
+
+  docker:
+    name: 镜像构建
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # 本机没装 Docker，靠 CI 验证 Dockerfile 能正常构建
+      - name: 构建镜像
+        run: docker build -t shortlink:ci .

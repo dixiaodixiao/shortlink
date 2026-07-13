@@ -1,0 +1,9 @@
+# 减小构建上下文，加快镜像构建
+.git
+.github
+.idea
+.vscode
+*.md
+Dockerfile
+.dockerignore
+coverage.out

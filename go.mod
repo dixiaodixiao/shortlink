@@ -1,4 +1,4 @@
-module github.com/1570011251z-crypto/shortlink
+module github.com/dixiaodixiao/shortlink
 
 go 1.26
 

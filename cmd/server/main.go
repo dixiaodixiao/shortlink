@@ -2,20 +2,31 @@ package main
 
 import (
 	"log"
-	"net/http"
+	"os"
 
-	"github.com/gin-gonic/gin"
+	"github.com/dixiaodixiao/shortlink/internal/handler"
+	"github.com/dixiaodixiao/shortlink/internal/repository"
+	"github.com/dixiaodixiao/shortlink/internal/service"
 )
 
+// getenv 读取环境变量，缺省时返回 fallback（12-factor：配置来自环境）。
+func getenv(key, fallback string) string {
+	if v := os.Getenv(key); v != "" {
+		return v
+	}
+	return fallback
+}
+
 func main() {
-	r := gin.Default()
+	addr := ":" + getenv("PORT", "8080")
+	baseURL := getenv("BASE_URL", "http://localhost:8080")
 
-	// 健康检查：用于确认服务存活（容器编排、负载均衡都会用到）
-	r.GET("/healthz", func(c *gin.Context) {
-		c.JSON(http.StatusOK, gin.H{"status": "ok"})
-	})
+	// 依赖装配：repository -> service -> handler -> router
+	repo := repository.NewMemoryRepository()
+	svc := service.NewLinkService(repo)
+	h := handler.NewLinkHandler(svc, baseURL)
+	r := handler.NewRouter(h)
 
-	const addr = ":8080"
 	log.Printf("shortlink server listening on %s", addr)
 	if err := r.Run(addr); err != nil {
 		log.Fatalf("server failed to start: %v", err)

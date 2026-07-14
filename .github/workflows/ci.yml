@@ -10,10 +10,10 @@ jobs:
     name: 构建与测试
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: 安装 Go
-        uses: actions/setup-go@v5
+        uses: actions/setup-go@v6
         with:
           go-version-file: go.mod # 与 go.mod 声明的版本保持一致
           cache: true
@@ -35,7 +35,7 @@ jobs:
     name: 镜像构建
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       # 本机没装 Docker，靠 CI 验证 Dockerfile 能正常构建
       - name: 构建镜像

@@ -11,6 +11,9 @@ func NewRouter(h *LinkHandler) *gin.Engine {
 	r := gin.New()
 	r.Use(gin.Logger(), gin.Recovery())
 
+	// Web UI 首页
+	r.GET("/", homepage)
+
 	r.GET("/healthz", func(c *gin.Context) {
 		c.JSON(http.StatusOK, gin.H{"status": "ok"})
 	})

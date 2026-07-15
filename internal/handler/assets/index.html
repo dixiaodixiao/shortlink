@@ -1,0 +1,251 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>shortlink · 短链接服务</title>
+  <style>
+    :root {
+      --bg: #f6f7f9;
+      --card: #ffffff;
+      --text: #1a1d21;
+      --muted: #6b7280;
+      --border: #e5e7eb;
+      --accent: #2563eb;
+      --accent-hover: #1d4ed8;
+      --ok: #16a34a;
+      --err: #dc2626;
+      --code-bg: #f3f4f6;
+    }
+    @media (prefers-color-scheme: dark) {
+      :root {
+        --bg: #0f1115;
+        --card: #191c22;
+        --text: #e6e8eb;
+        --muted: #9aa0a6;
+        --border: #2a2e37;
+        --accent: #3b82f6;
+        --accent-hover: #60a5fa;
+        --ok: #22c55e;
+        --err: #f87171;
+        --code-bg: #22262e;
+      }
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC",
+        "Microsoft YaHei", Roboto, Helvetica, Arial, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      line-height: 1.6;
+      -webkit-font-smoothing: antialiased;
+    }
+    .wrap { max-width: 640px; margin: 0 auto; padding: 48px 20px 64px; }
+    header { text-align: center; margin-bottom: 36px; }
+    header h1 { margin: 0 0 8px; font-size: 30px; letter-spacing: -0.5px; }
+    header p { margin: 0; color: var(--muted); font-size: 15px; }
+    .card {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      padding: 24px;
+      margin-bottom: 20px;
+      box-shadow: 0 1px 2px rgba(0,0,0,0.04);
+    }
+    .card h2 { margin: 0 0 16px; font-size: 17px; display: flex; align-items: center; gap: 8px; }
+    .row { display: flex; gap: 10px; }
+    input[type="text"] {
+      flex: 1; min-width: 0;
+      padding: 11px 14px;
+      font-size: 15px;
+      border: 1px solid var(--border);
+      border-radius: 9px;
+      background: var(--bg);
+      color: var(--text);
+      transition: border-color .15s;
+    }
+    input[type="text"]:focus { outline: none; border-color: var(--accent); }
+    button {
+      padding: 11px 20px;
+      font-size: 15px;
+      font-weight: 600;
+      color: #fff;
+      background: var(--accent);
+      border: none;
+      border-radius: 9px;
+      cursor: pointer;
+      white-space: nowrap;
+      transition: background .15s;
+    }
+    button:hover { background: var(--accent-hover); }
+    button:disabled { opacity: .55; cursor: default; }
+    button.ghost {
+      background: transparent; color: var(--accent);
+      border: 1px solid var(--border); padding: 8px 12px; font-size: 13px;
+    }
+    button.ghost:hover { background: var(--code-bg); }
+    .result { margin-top: 16px; font-size: 14px; }
+    .result.hidden { display: none; }
+    .short-link {
+      display: flex; align-items: center; gap: 10px;
+      padding: 12px 14px; background: var(--code-bg);
+      border-radius: 9px; margin-bottom: 12px;
+    }
+    .short-link a {
+      flex: 1; min-width: 0; color: var(--accent);
+      font-weight: 600; text-decoration: none; word-break: break-all;
+    }
+    .short-link a:hover { text-decoration: underline; }
+    .meta { display: grid; grid-template-columns: auto 1fr; gap: 6px 16px; }
+    .meta dt { color: var(--muted); }
+    .meta dd { margin: 0; word-break: break-all; }
+    .count { font-weight: 700; color: var(--ok); }
+    .msg { padding: 10px 14px; border-radius: 9px; font-size: 14px; }
+    .msg.err { background: rgba(220,38,38,.1); color: var(--err); }
+    footer { text-align: center; margin-top: 40px; color: var(--muted); font-size: 13px; }
+    footer a { color: var(--muted); }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <header>
+      <h1>🔗 shortlink</h1>
+      <p>把长链接变短，可跳转、可统计点击</p>
+    </header>
+
+    <!-- 生成短链 -->
+    <section class="card">
+      <h2>生成短链</h2>
+      <div class="row">
+        <input id="urlInput" type="text" placeholder="粘贴长链接，如 https://www.anthropic.com/news"
+               autocomplete="off" spellcheck="false">
+        <button id="createBtn">生成</button>
+      </div>
+      <div id="createResult" class="result hidden"></div>
+    </section>
+
+    <!-- 查询统计 -->
+    <section class="card">
+      <h2>查询统计</h2>
+      <div class="row">
+        <input id="codeInput" type="text" placeholder="输入短码或短链接，如 1"
+               autocomplete="off" spellcheck="false">
+        <button id="lookupBtn">查询</button>
+      </div>
+      <div id="lookupResult" class="result hidden"></div>
+    </section>
+
+    <footer>
+      Go + Gin · <a href="/healthz" target="_blank">健康检查</a>
+    </footer>
+  </div>
+
+  <script>
+    const $ = (id) => document.getElementById(id);
+
+    // 从输入里取短码：支持直接输码，也支持粘完整短链接
+    function extractCode(raw) {
+      const v = raw.trim();
+      if (!v) return "";
+      if (v.includes("/")) {
+        const parts = v.split("/").filter(Boolean);
+        return parts[parts.length - 1] || "";
+      }
+      return v;
+    }
+
+    function escapeHtml(s) {
+      return String(s).replace(/[&<>"']/g, (c) =>
+        ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+    }
+
+    function fmtTime(iso) {
+      const d = new Date(iso);
+      if (isNaN(d)) return iso;
+      return d.toLocaleString();
+    }
+
+    // ---- 生成短链 ----
+    async function createLink() {
+      const url = $("urlInput").value.trim();
+      const box = $("createResult");
+      if (!url) { showErr(box, "请输入链接"); return; }
+      setBusy($("createBtn"), true);
+      try {
+        const resp = await fetch("/api/links", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ url }),
+        });
+        const data = await resp.json().catch(() => ({}));
+        if (resp.status === 201) {
+          box.className = "result";
+          box.innerHTML =
+            '<div class="short-link">' +
+              '<a href="' + escapeHtml(data.short_url) + '" target="_blank" rel="noopener">' +
+                escapeHtml(data.short_url) + '</a>' +
+              '<button class="ghost" onclick="copy(this,\'' + escapeHtml(data.short_url) + '\')">复制</button>' +
+            '</div>';
+        } else {
+          showErr(box, data.error || ("生成失败（HTTP " + resp.status + "）"));
+        }
+      } catch (e) {
+        showErr(box, "请求出错：" + e.message);
+      } finally {
+        setBusy($("createBtn"), false);
+      }
+    }
+
+    // ---- 查询统计 ----
+    async function lookup() {
+      const code = extractCode($("codeInput").value);
+      const box = $("lookupResult");
+      if (!code) { showErr(box, "请输入短码"); return; }
+      setBusy($("lookupBtn"), true);
+      try {
+        const resp = await fetch("/api/links/" + encodeURIComponent(code));
+        const data = await resp.json().catch(() => ({}));
+        if (resp.status === 200) {
+          box.className = "result";
+          box.innerHTML =
+            '<dl class="meta">' +
+              '<dt>短码</dt><dd>' + escapeHtml(data.code) + '</dd>' +
+              '<dt>原始链接</dt><dd><a href="' + escapeHtml(data.original_url) +
+                '" target="_blank" rel="noopener">' + escapeHtml(data.original_url) + '</a></dd>' +
+              '<dt>点击次数</dt><dd class="count">' + escapeHtml(data.click_count) + '</dd>' +
+              '<dt>创建时间</dt><dd>' + escapeHtml(fmtTime(data.created_at)) + '</dd>' +
+            '</dl>';
+        } else if (resp.status === 404) {
+          showErr(box, "未找到该短码");
+        } else {
+          showErr(box, data.error || ("查询失败（HTTP " + resp.status + "）"));
+        }
+      } catch (e) {
+        showErr(box, "请求出错：" + e.message);
+      } finally {
+        setBusy($("lookupBtn"), false);
+      }
+    }
+
+    function showErr(box, msg) {
+      box.className = "result";
+      box.innerHTML = '<div class="msg err">' + escapeHtml(msg) + '</div>';
+    }
+    function setBusy(btn, busy) { btn.disabled = busy; }
+    function copy(btn, text) {
+      navigator.clipboard.writeText(text).then(() => {
+        const old = btn.textContent;
+        btn.textContent = "已复制";
+        setTimeout(() => { btn.textContent = old; }, 1200);
+      });
+    }
+    window.copy = copy;
+
+    $("createBtn").addEventListener("click", createLink);
+    $("lookupBtn").addEventListener("click", lookup);
+    $("urlInput").addEventListener("keydown", (e) => { if (e.key === "Enter") createLink(); });
+    $("codeInput").addEventListener("keydown", (e) => { if (e.key === "Enter") lookup(); });
+  </script>
+</body>
+</html>
